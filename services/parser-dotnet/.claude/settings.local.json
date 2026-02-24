@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet add Parser.API/Parser.API.csproj package Microsoft.CodeAnalysis.CSharp --version 4.9.2)",
+      "Bash(dotnet add Parser.API/Parser.API.csproj package Microsoft.CodeAnalysis.Workspaces.Common --version 4.9.2)",
+      "Bash(dotnet add Parser.Tests/Parser.Tests.csproj package Moq --version 4.20.72)",
+      "Bash(dotnet add Parser.Tests/Parser.Tests.csproj package Microsoft.AspNetCore.Mvc.Testing --version 8.0.0)",
+      "Bash(dotnet add Parser.Tests/Parser.Tests.csproj package coverlet.collector --version 6.0.2)",
+      "Bash(dotnet add Parser.Tests/Parser.Tests.csproj package Microsoft.Extensions.Logging.Abstractions --version 8.0.0)"
+    ]
+  }
+}

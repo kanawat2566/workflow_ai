@@ -27,34 +27,72 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+
+      # Cache npm cache only if frontend/package-lock.json exists (avoid errors when no lockfile)
+      - name: Cache npm (conditional)
+        if: ${{ hashFiles('frontend/package-lock.json') != '' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Type check
+      # ── Gate 1: TypeScript (BLOCKING) ────────────────────
+      - name: Type check — tsc
         working-directory: frontend
-        run: npm run type-check || npx tsc --noEmit
+        run: npx tsc --noEmit
 
-      - name: Lint
+      # ── Gate 2: Lint — no warnings allowed (BLOCKING) ────
+      - name: Lint — ESLint
         working-directory: frontend
-        run: npm run lint
+        run: npx eslint . --max-warnings=0 --format=@microsoft/eslint-formatter-sarif --output-file eslint-results.sarif || npx eslint . --max-warnings=0
 
+      # ── Gate 3: Unit Tests + Coverage (BLOCKING) ─────────
+      - name: Unit tests + coverage
+        working-directory: frontend
+        run: |
+          npm test -- \
+            --coverage \
+            --coverageThreshold='{"global":{"lines":70,"branches":60,"functions":70}}' \
+            --passWithNoTests
+
+      # ── Gate 4: Build must succeed (BLOCKING) ─────────────
       - name: Build
         working-directory: frontend
         env:
           NEXT_PUBLIC_GATEWAY_URL: "http://localhost:8000"
         run: npm run build
 
-      - name: Run tests
+      # ── Gate 5: Bundle size check ─────────────────────────
+      - name: Check bundle size
         working-directory: frontend
-        run: npm test -- --passWithNoTests
+        run: |
+          if [ -f ".next/analyze/client.html" ]; then
+            echo "Bundle analysis available"
+          fi
+          # Warn if total JS > 500KB
+          TOTAL=$(find .next/static/chunks -name "*.js" -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}')
+          if [ -n "$TOTAL" ] && [ "$TOTAL" -gt 512000 ]; then
+            echo "::warning::Total JS bundle size ${TOTAL} bytes exceeds 500KB"
+          fi
 
-      - name: Docker build (no push)
+      # ── Gate 6: Docker Build (BLOCKING) ───────────────────
+      - name: Docker build
         run: |
           docker build \
             -f infra/docker/nextjs.Dockerfile \
             -t bot-ai/frontend:${{ github.sha }} \
             frontend
+
+      - name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: frontend/coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: false

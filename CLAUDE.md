@@ -44,12 +44,21 @@ shared/contracts/
 └── artifact_schema.json — Executor output
 ```
 
+## Coding Standards (อ่านก่อนเขียน code ทุกบรรทัด)
+ดู [CODING_STANDARDS.md](CODING_STANDARDS.md) — บังคับทุก AI agent ปฏิบัติตาม:
+- Function ≤ 20 บรรทัด, Class ≤ 200 บรรทัด
+- Type hints ครบ (Python), Nullable enable (.NET), No `any` (TypeScript)
+- **Unit test ทุก public function** — coverage ≥ 70%
+- AAA pattern (Arrange-Act-Assert) ทุก test
+- ห้าม hard-code URL/secret — ใช้ env var เสมอ
+
 ## กฎสำคัญ
 1. **แต่ละ AI ทำได้เฉพาะ working directory ของตัวเอง**
 2. **ถ้าต้องการเปลี่ยน contract → แจ้ง human ก่อน**
 3. **Internal service URL ใช้ Docker service name** (เช่น `http://rag:8002`)
 4. **ทุก service ต้องมี `GET /health` endpoint**
 5. **ทุก service ต้องมี `Dockerfile`**
+6. **ทุก service ต้องมี unit tests ใน `tests/unit/`** (Python) หรือ `*.Tests/Unit/` (.NET)
 
 ## Run Development
 ```bash

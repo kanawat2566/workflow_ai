@@ -13,6 +13,7 @@ on:
       - "services/telegram-bot/**"
       - "services/worker/**"
       - "shared/contracts/**"
+      - "pyproject.toml"
       - ".github/workflows/ci-python-services.yml"
   pull_request:
     branches: [main, develop]
@@ -72,13 +73,11 @@ jobs:
               - 'services/worker/**'
               - 'shared/contracts/**'
 
-  # ─── Template job (reused per service) ───────────────────
   test-service:
     name: Test ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: |
-      needs.detect-changes.outputs[matrix.service] == 'true'
+    if: needs.detect-changes.outputs[matrix.service] == 'true'
 
     strategy:
       fail-fast: false
@@ -107,21 +106,41 @@ jobs:
         working-directory: services/${{ matrix.service }}
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio pytest-cov httpx ruff pyright bandit
 
-      - name: Lint (ruff)
+      # ── Gate 1: Lint (BLOCKING) ──────────────────────────
+      - name: Lint — ruff
+        working-directory: services/${{ matrix.service }}
+        run: ruff check . --output-format=github
+
+      - name: Format check — ruff format
+        working-directory: services/${{ matrix.service }}
+        run: ruff format --check .
+
+      # ── Gate 2: Type Check (BLOCKING on PR to main) ──────
+      - name: Type check — pyright
         working-directory: services/${{ matrix.service }}
         run: |
-          pip install ruff
-          ruff check . --output-format=github
+          if [ "${{ github.base_ref }}" = "main" ]; then
+            pyright --pythonversion 3.12 .
+          else
+            pyright --pythonversion 3.12 . || echo "::warning::Type errors found (non-blocking on feature branch)"
+          fi
 
-      - name: Type check (pyright)
+      # ── Gate 3: Security Scan (BLOCKING) ─────────────────
+      - name: Security scan — bandit
         working-directory: services/${{ matrix.service }}
         run: |
-          pip install pyright
-          pyright --pythonversion 3.12 . || true   # non-blocking ใน dev phase
+          bandit -r . \
+            -x ./tests \
+            -ll \
+            --exit-zero-on-skips \
+            -f json -o bandit-report.json || true
+          # Fail only on HIGH severity
+          bandit -r . -x ./tests -lll --exit-zero-on-skips
 
-      - name: Run tests
+      # ── Gate 4: Unit Tests + Coverage (BLOCKING) ─────────
+      - name: Unit tests + coverage
         working-directory: services/${{ matrix.service }}
         env:
           POSTGRES_URL: "postgresql://test:test@localhost:5432/test"
@@ -130,11 +149,31 @@ jobs:
           OPENROUTER_API_KEY: "test-key"
           GOOGLE_API_KEY: "test-key"
         run: |
-          pytest tests/ -v --tb=short || echo "No tests yet"
+          if [ -d "tests/unit" ] && [ "$(ls -A tests/unit)" ]; then
+            pytest tests/unit/ \
+              -v --tb=short \
+              -m "unit" \
+              --cov=. \
+              --cov-report=xml:coverage.xml \
+              --cov-report=term-missing \
+              --cov-fail-under=70
+          else
+            echo "::warning::No unit tests found for ${{ matrix.service }} — add tests in tests/unit/"
+          fi
 
-      - name: Docker build (no push)
+      # ── Gate 5: Docker Build (BLOCKING) ──────────────────
+      - name: Docker build
         run: |
           docker build \
             -f infra/docker/python.Dockerfile \
             -t bot-ai/${{ matrix.service }}:${{ github.sha }} \
             services/${{ matrix.service }}
+
+      # ── Upload coverage report ────────────────────────────
+      - name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: services/${{ matrix.service }}/coverage.xml
+          flags: ${{ matrix.service }}
+          fail_ci_if_error: false

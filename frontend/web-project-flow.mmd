@@ -1,0 +1,78 @@
+flowchart TD
+    A[Start Frontend Project] --> B[Read Spec: CLAUDE.md]
+    B --> C[Read Contracts]
+    C --> C1[sse_events.json]
+    C --> C2[approval_pack.json]
+
+    C1 --> D[Define TS Types]
+    C2 --> D
+    D --> E[Scaffold Next.js Routes]
+
+    E --> E1[app/page.tsx Chat]
+    E --> E2[app/monitor/page.tsx]
+    E --> E3[app/history/page.tsx]
+    E --> E4[app/approval/runId/page.tsx]
+    E --> E5[app/api/stream/runId/route.ts SSE Proxy]
+
+    E5 --> F[Gateway /stream/:runId]
+    F --> G[Frontend EventSource Client]
+
+    G --> H{SSE Event Type}
+    H -->|stream_token| I[StreamingChat append tokens]
+    H -->|agent_update| J[AgentProgressBoard update agent status]
+    H -->|run_started/completed/failed| K[Run status banner/log]
+    H -->|approval_required| L[Navigate to Approval Page]
+    H -->|approval_received| M[Refresh approval status]
+    H -->|log| N[Append debug/activity log]
+
+    E1 --> O[StreamingChat Component]
+    E2 --> P[AgentProgressBoard Component]
+    E4 --> Q[ApprovalPack Component]
+    E4 --> R[ApprovalButtons Component]
+    E1 --> S[FeedbackBar Component]
+    E4 --> S
+
+    Q --> Q1[Render Summary + Details]
+    Q --> Q2[Render Artifacts File Tree]
+    Q --> Q3[Render Unified Diff Viewer]
+    Q --> Q4[Render Evaluation Score/Issues]
+
+    Q2 --> T[react-complex-tree]
+    Q3 --> U[git-diff-view/react]
+
+    R --> V{User Decision}
+    V -->|Approve| W[POST approve API stub/real]
+    V -->|Reject + comment| X[POST reject API stub/real]
+    W --> M
+    X --> M
+
+    E3 --> Y[History Page]
+    Y --> Y1[Mock data first]
+    Y1 --> Y2[Replace with API when contract exists]
+
+    K --> Z[Verify with typecheck/build]
+    M --> Z
+    Y2 --> Z
+
+    subgraph UI Pages
+      E1
+      E2
+      E3
+      E4
+    end
+
+    subgraph Core Components
+      O
+      P
+      Q
+      R
+      S
+    end
+
+    subgraph External/Shared
+      F
+      C1
+      C2
+      T
+      U
+    end

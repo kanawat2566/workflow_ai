@@ -1,0 +1,92 @@
+# Pre-commit hooks — ตรวจก่อน commit ทุกครั้ง
+# ติดตั้ง: pip install pre-commit && pre-commit install
+# รันด้วยมือ: pre-commit run --all-files
+
+repos:
+  # ── General ────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
+
+  # ── Python — Ruff lint + format ────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--fix", "--exit-non-zero-on-fix"]
+        files: ^services/
+      - id: ruff-format
+        files: ^services/
+
+  # ── Python — Type check ────────────────────────────────
+  - repo: local
+    hooks:
+      - id: pyright-gateway
+        name: pyright (gateway)
+        entry: bash infra/scripts/hook_pyright.sh gateway
+        language: system
+        files: ^services/gateway/
+        pass_filenames: false
+
+      - id: pyright-orchestrator
+        name: pyright (orchestrator)
+        entry: bash infra/scripts/hook_pyright.sh orchestrator
+        language: system
+        files: ^services/orchestrator/
+        pass_filenames: false
+
+  # ── Python — Unit tests ────────────────────────────────
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest unit (fast)
+        entry: bash infra/scripts/hook_pytest.sh
+        language: system
+        files: ^services/
+        pass_filenames: false
+
+  # ── .NET — Format check ────────────────────────────────
+  - repo: local
+    hooks:
+      - id: dotnet-format
+        name: dotnet format (parser)
+        entry: bash infra/scripts/hook_dotnet_format.sh
+        language: system
+        files: ^services/parser-dotnet/.*\.cs$
+        pass_filenames: false
+
+  # ── Frontend — ESLint ──────────────────────────────────
+  - repo: local
+    hooks:
+      - id: eslint-frontend
+        name: ESLint (frontend)
+        entry: bash infra/scripts/hook_frontend.sh eslint
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+
+      - id: tsc-frontend
+        name: TypeScript check (frontend)
+        entry: bash infra/scripts/hook_frontend.sh tsc
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+
+  # ── Contracts — Validate JSON ──────────────────────────
+  - repo: local
+    hooks:
+      - id: validate-contracts
+        name: Validate shared contracts
+        entry: python infra/scripts/validate_contracts.py
+        language: system
+        files: ^shared/contracts/
+        pass_filenames: false
