@@ -1,0 +1,14 @@
+flowchart LR
+  U[User Request] --> LEAD[Lead Agent: สรุปโจทย์ + แบ่งงาน]
+  LEAD --> BA[BA Agent: Requirements/AC]
+  LEAD --> ARCH[Architect Agent: Design/Diagram]
+  LEAD --> DEV[Dev Agent: Generate Code/Scaffold]
+  LEAD --> QA[QA Agent: Test Cases/Checklist]
+  BA --> PACK[Assemble Pack: รวมผลลัพธ์]
+  ARCH --> PACK
+  DEV --> PACK
+  QA --> PACK
+  PACK --> APPR{Approval Gate}
+  APPR -- Approve --> EXEC[Execute Tools: สร้างไฟล์จริง/commit/build]
+  APPR -- Revise --> LEAD
+  EXEC --> OUT[Output: Repo + Docs + Tests]

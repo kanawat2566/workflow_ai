@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chunk",
+  "description": "Output from .NET Parser → Input to RAG Service",
+  "type": "object",
+  "required": ["chunkId", "file", "type", "content", "metadata"],
+  "properties": {
+    "chunkId": {
+      "type": "string",
+      "description": "Unique ID: e.g. PaymentController.Save.POST",
+      "example": "PaymentController.Save.POST"
+    },
+    "file": {
+      "type": "string",
+      "description": "Relative path from repo root",
+      "example": "Controllers/PaymentController.cs"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "action_method",
+        "viewmodel",
+        "service_method",
+        "repository_method",
+        "razor_view",
+        "razor_partial",
+        "js_function",
+        "js_event_handler",
+        "js_ajax_call",
+        "ef_model",
+        "interface",
+        "config"
+      ]
+    },
+    "content": {
+      "type": "string",
+      "description": "Raw source code of the chunk"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "controller": { "type": "string" },
+        "action": { "type": "string" },
+        "httpMethod": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "ANY"]
+        },
+        "route": { "type": "string", "example": "/Payment/Save" },
+        "namespace": { "type": "string" },
+        "className": { "type": "string" },
+        "methodName": { "type": "string" },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "source": {
+                "type": "string",
+                "enum": ["body", "query", "route", "form", "unknown"]
+              }
+            }
+          }
+        },
+        "viewModel": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "properties": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "calls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Methods or services this chunk calls",
+          "example": ["IPaymentService.ProcessPayment"]
+        },
+        "calledBy": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What calls this chunk"
+        },
+        "dbTables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "DB tables this chunk interacts with"
+        },
+        "viewPath": {
+          "type": "string",
+          "description": "For action_method: path to corresponding view"
+        },
+        "partialsUsed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ajaxEndpoints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "For JS chunks: API endpoints called via $.ajax"
+        },
+        "eventHandlers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "For JS chunks: e.g. #btnSave click"
+        },
+        "validations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Data annotations: [Required], [Range], etc."
+        },
+        "module": {
+          "type": "string",
+          "description": "Business module: Payment, Order, User, etc."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["csharp", "javascript", "html", "css", "razor"]
+        },
+        "lineStart": { "type": "integer" },
+        "lineEnd": { "type": "integer" }
+      }
+    }
+  }
+}

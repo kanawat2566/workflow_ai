@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  participant OR as Orchestrator
+  participant EV as Evaluator
+  participant MET as Metrics Store
+  participant MEM as Memory Curation
+  participant AUD as Audit
+
+  OR->>EV: evaluate(run_id, artifacts, results)
+  EV-->>OR: score + failure categories
+  OR->>MET: write(metrics: latency, pass_rate, user_feedback)
+  OR->>AUD: log(evaluation_recorded)
+
+  alt user_feedback == Bad
+    OR->>MEM: curate(update rules/prefs, extract lessons)
+    MEM-->>OR: updated memory entries (facts, do/don't)
+    OR->>AUD: log(memory_updated)
+  else user_feedback == Good
+    OR->>MEM: curate(store successful pattern)
+    MEM-->>OR: template/prompt improved
+    OR->>AUD: log(pattern_saved)
+  end

@@ -1,0 +1,296 @@
+version: "3.9"
+
+# ============================================================
+# AI Agent Platform — Docker Compose
+# Run: docker compose up -d
+# ============================================================
+
+x-python-common: &python-common
+  restart: unless-stopped
+  networks:
+    - bot_ai_net
+  environment:
+    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    - POSTGRES_URL=postgresql://botai:botai@postgres:5432/botai
+    - VALKEY_URL=redis://valkey:6379/0
+    - QDRANT_URL=http://qdrant:6333
+    - OPENSEARCH_URL=http://opensearch:9200
+    - PARSER_DOTNET_URL=http://parser-dotnet:5100
+    - ORCHESTRATOR_URL=http://orchestrator:8001
+    - RAG_URL=http://rag:8002
+    - MEMORY_URL=http://memory:8003
+    - EXECUTOR_URL=http://executor:8004
+    - EVALUATOR_URL=http://evaluator:8005
+    - TEMPORAL_URL=temporal:7233
+    - LANGFUSE_URL=http://langfuse:3001
+
+services:
+
+  # ─────────────────────────────────────────
+  # Python Services
+  # ─────────────────────────────────────────
+
+  gateway:
+    <<: *python-common
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - orchestrator
+      - valkey
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+
+  orchestrator:
+    <<: *python-common
+    build:
+      context: ./services/orchestrator
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    depends_on:
+      - memory
+      - rag
+      - executor
+      - evaluator
+      - temporal
+      - valkey
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+      - workspace:/workspace
+
+  rag:
+    <<: *python-common
+    build:
+      context: ./services/rag
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    depends_on:
+      - qdrant
+      - opensearch
+      - parser-dotnet
+      - worker
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+      - workspace:/workspace:ro
+
+  memory:
+    <<: *python-common
+    build:
+      context: ./services/memory
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    depends_on:
+      - postgres
+      - valkey
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+
+  executor:
+    <<: *python-common
+    build:
+      context: ./services/executor
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8004"
+    depends_on:
+      - postgres
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+      - ./shared/templates:/app/templates:ro
+      - workspace:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock  # for Docker-in-Docker build runner
+
+  evaluator:
+    <<: *python-common
+    build:
+      context: ./services/evaluator
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+      - workspace:/workspace:ro
+
+  telegram-bot:
+    <<: *python-common
+    build:
+      context: ./services/telegram-bot
+      dockerfile: Dockerfile
+    ports:
+      - "8006:8006"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GATEWAY_URL=http://gateway:8000
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+
+  worker:
+    <<: *python-common
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    depends_on:
+      - valkey
+      - postgres
+      - parser-dotnet
+      - qdrant
+    volumes:
+      - ./shared/contracts:/app/contracts:ro
+      - workspace:/workspace
+
+  # ─────────────────────────────────────────
+  # .NET Parser Service
+  # ─────────────────────────────────────────
+
+  parser-dotnet:
+    build:
+      context: ./services/parser-dotnet
+      dockerfile: Dockerfile
+    ports:
+      - "5100:5100"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    environment:
+      - ASPNETCORE_URLS=http://+:5100
+      - ASPNETCORE_ENVIRONMENT=Production
+    volumes:
+      - ./shared/contracts:/contracts:ro
+      - workspace:/workspace
+
+  # ─────────────────────────────────────────
+  # Next.js Frontend
+  # ─────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    environment:
+      - NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000
+      - NEXT_PUBLIC_LANGFUSE_URL=http://localhost:3001
+
+  # ─────────────────────────────────────────
+  # Infrastructure
+  # ─────────────────────────────────────────
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - plugins.security.disabled=true
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    environment:
+      - POSTGRES_USER=botai
+      - POSTGRES_PASSWORD=botai
+      - POSTGRES_DB=botai
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    volumes:
+      - valkey-data:/data
+
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    ports:
+      - "7233:7233"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=botai
+      - POSTGRES_PWD=botai
+      - POSTGRES_SEEDS=postgres
+    depends_on:
+      - postgres
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      - temporal
+
+  langfuse:
+    image: langfuse/langfuse:2
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    networks:
+      - bot_ai_net
+    environment:
+      - DATABASE_URL=postgresql://botai:botai@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=${LANGFUSE_SECRET:-changeme}
+      - SALT=${LANGFUSE_SALT:-changeme}
+      - NEXTAUTH_URL=http://localhost:3001
+    depends_on:
+      - postgres
+
+# ─────────────────────────────────────────
+# Networks & Volumes
+# ─────────────────────────────────────────
+
+networks:
+  bot_ai_net:
+    driver: bridge
+
+volumes:
+  workspace:        # shared repo workspace (Python + .NET)
+  qdrant-data:
+  opensearch-data:
+  postgres-data:
+  valkey-data:

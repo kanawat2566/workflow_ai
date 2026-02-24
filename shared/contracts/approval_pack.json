@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ApprovalPack",
+  "description": "Approval Pack sent to user (Telegram + Frontend)",
+  "type": "object",
+  "required": ["runId", "useCase", "summary", "artifacts", "status"],
+  "properties": {
+    "runId": { "type": "string" },
+    "useCase": {
+      "type": "string",
+      "enum": [
+        "doc_generation",
+        "web_app_creation",
+        "bot_team_spec",
+        "media_generation"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "description": "Short human-readable summary of what was done"
+    },
+    "details": {
+      "type": "string",
+      "description": "Detailed explanation (markdown)"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "path"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["markdown", "code", "diff", "zip", "url"]
+          },
+          "path": { "type": "string" },
+          "diffUrl": { "type": "string" },
+          "previewUrl": { "type": "string" }
+        }
+      }
+    },
+    "diff": {
+      "type": "string",
+      "description": "Unified diff of all changes"
+    },
+    "evaluationScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "evaluationIssues": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending_approval", "approved", "rejected", "revised"]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "approvedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rejectionComment": { "type": "string" },
+    "prUrl": { "type": "string" },
+    "commitHash": { "type": "string" }
+  }
+}

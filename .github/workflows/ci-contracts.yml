@@ -1,0 +1,55 @@
+name: CI — Validate Shared Contracts
+
+on:
+  push:
+    paths:
+      - "shared/contracts/**"
+  pull_request:
+    paths:
+      - "shared/contracts/**"
+
+jobs:
+  validate-schemas:
+    name: Validate JSON Schemas
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install ajv-cli (JSON Schema validator)
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate chunk_schema.json is valid JSON Schema
+        run: ajv compile -s shared/contracts/chunk_schema.json --spec=draft7
+
+      - name: Validate retrieve_schema.json
+        run: ajv compile -s shared/contracts/retrieve_schema.json --spec=draft7
+
+      - name: Validate sse_events.json
+        run: ajv compile -s shared/contracts/sse_events.json --spec=draft7
+
+      - name: Validate approval_pack.json
+        run: ajv compile -s shared/contracts/approval_pack.json --spec=draft7
+
+      - name: Validate artifact_schema.json
+        run: ajv compile -s shared/contracts/artifact_schema.json --spec=draft7
+
+      - name: Validate ports.json (no duplicate ports)
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          data = json.load(open("shared/contracts/ports.json"))
+          all_ports = list(data["services"].values()) + list(data["infrastructure"].values())
+          if len(all_ports) != len(set(all_ports)):
+              print("ERROR: Duplicate ports found!")
+              sys.exit(1)
+          print("All ports unique ✓")
+          EOF
+
+      - name: Validate agent_state.py syntax
+        run: python3 -m py_compile shared/contracts/agent_state.py && echo "agent_state.py syntax OK ✓"

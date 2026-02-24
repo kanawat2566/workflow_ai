@@ -1,0 +1,23 @@
+{
+  "services": {
+    "gateway": 8000,
+    "orchestrator": 8001,
+    "rag": 8002,
+    "memory": 8003,
+    "executor": 8004,
+    "evaluator": 8005,
+    "telegram-bot": 8006,
+    "parser-dotnet": 5100,
+    "frontend": 3000,
+    "langfuse": 3001
+  },
+  "infrastructure": {
+    "qdrant": 6333,
+    "qdrant_grpc": 6334,
+    "postgres": 5432,
+    "valkey": 6379,
+    "temporal": 7233,
+    "temporal_ui": 8080,
+    "opensearch": 9200
+  }
+}

@@ -1,0 +1,207 @@
+name: CD — Deploy to Local Docker (Self-Hosted Runner)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Services to redeploy (comma-separated, or 'all')"
+        required: false
+        default: "all"
+
+# ป้องกัน deploy ซ้อนกัน
+concurrency:
+  group: deploy-local
+  cancel-in-progress: false   # รอให้ deploy ก่อนหน้าเสร็จก่อน
+
+jobs:
+  detect-changes:
+    name: Detect changed services
+    runs-on: self-hosted   # ← วิ่งบนเครื่อง local
+    outputs:
+      parser-dotnet: ${{ steps.filter.outputs.parser-dotnet }}
+      gateway:       ${{ steps.filter.outputs.gateway }}
+      orchestrator:  ${{ steps.filter.outputs.orchestrator }}
+      rag:           ${{ steps.filter.outputs.rag }}
+      memory:        ${{ steps.filter.outputs.memory }}
+      executor:      ${{ steps.filter.outputs.executor }}
+      evaluator:     ${{ steps.filter.outputs.evaluator }}
+      telegram-bot:  ${{ steps.filter.outputs.telegram-bot }}
+      worker:        ${{ steps.filter.outputs.worker }}
+      frontend:      ${{ steps.filter.outputs.frontend }}
+      infra:         ${{ steps.filter.outputs.infra }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            parser-dotnet:
+              - 'services/parser-dotnet/**'
+              - 'infra/docker/dotnet.Dockerfile'
+            gateway:
+              - 'services/gateway/**'
+              - 'infra/docker/python.Dockerfile'
+            orchestrator:
+              - 'services/orchestrator/**'
+              - 'shared/contracts/**'
+            rag:
+              - 'services/rag/**'
+              - 'shared/contracts/**'
+            memory:
+              - 'services/memory/**'
+            executor:
+              - 'services/executor/**'
+              - 'shared/templates/**'
+            evaluator:
+              - 'services/evaluator/**'
+            telegram-bot:
+              - 'services/telegram-bot/**'
+            worker:
+              - 'services/worker/**'
+            frontend:
+              - 'frontend/**'
+            infra:
+              - 'docker-compose.yml'
+              - 'infra/**'
+
+  # ─── Build & Restart changed services only ──────────────
+  deploy:
+    name: Deploy changed services
+    runs-on: self-hosted   # ← วิ่งบนเครื่อง local ที่ติดตั้ง runner
+    needs: detect-changes
+    env:
+      COMPOSE_FILE: docker-compose.yml
+      PROJECT_DIR: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Pull .env จาก local (ไม่เก็บใน git) ──────────────
+      - name: Check .env exists
+        run: |
+          if [ ! -f "$PROJECT_DIR/.env" ]; then
+            echo "ERROR: .env not found at $PROJECT_DIR/.env"
+            echo "Copy .env.example → .env and fill in API keys"
+            exit 1
+          fi
+          echo ".env found ✓"
+
+      # ── Build + restart เฉพาะ service ที่เปลี่ยน ──────────
+      - name: Deploy parser-dotnet
+        if: needs.detect-changes.outputs.parser-dotnet == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo ">>> Rebuilding parser-dotnet..."
+          docker compose build parser-dotnet
+          docker compose up -d --no-deps parser-dotnet
+          docker compose ps parser-dotnet
+
+      - name: Deploy gateway
+        if: needs.detect-changes.outputs.gateway == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo ">>> Rebuilding gateway..."
+          docker compose build gateway
+          docker compose up -d --no-deps gateway
+          docker compose ps gateway
+
+      - name: Deploy orchestrator
+        if: needs.detect-changes.outputs.orchestrator == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build orchestrator
+          docker compose up -d --no-deps orchestrator
+
+      - name: Deploy rag
+        if: needs.detect-changes.outputs.rag == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build rag
+          docker compose up -d --no-deps rag
+
+      - name: Deploy memory
+        if: needs.detect-changes.outputs.memory == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build memory
+          docker compose up -d --no-deps memory
+
+      - name: Deploy executor
+        if: needs.detect-changes.outputs.executor == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build executor
+          docker compose up -d --no-deps executor
+
+      - name: Deploy evaluator
+        if: needs.detect-changes.outputs.evaluator == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build evaluator
+          docker compose up -d --no-deps evaluator
+
+      - name: Deploy telegram-bot
+        if: needs.detect-changes.outputs.telegram-bot == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build telegram-bot
+          docker compose up -d --no-deps telegram-bot
+
+      - name: Deploy worker
+        if: needs.detect-changes.outputs.worker == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build worker
+          docker compose up -d --no-deps worker
+
+      - name: Deploy frontend
+        if: needs.detect-changes.outputs.frontend == 'true' || github.event.inputs.services == 'all'
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose build frontend
+          docker compose up -d --no-deps frontend
+
+      # ── Cleanup dangling images ────────────────────────────
+      - name: Cleanup old images
+        working-directory: ${{ github.workspace }}
+        run: docker image prune -f
+
+      # ── Health check ──────────────────────────────────────
+      - name: Health check all services
+        working-directory: ${{ github.workspace }}
+        run: |
+          sleep 5
+          echo "=== Container Status ==="
+          docker compose ps
+
+          echo ""
+          echo "=== Health Checks ==="
+          services=(gateway orchestrator rag memory executor evaluator)
+          ports=(8000 8001 8002 8003 8004 8005)
+
+          for i in "${!services[@]}"; do
+            svc="${services[$i]}"
+            port="${ports[$i]}"
+            if curl -sf "http://localhost:${port}/health" > /dev/null 2>&1; then
+              echo "✅ ${svc}:${port} — OK"
+            else
+              echo "⚠️  ${svc}:${port} — not responding yet (may still be starting)"
+            fi
+          done
+
+      # ── Summary ───────────────────────────────────────────
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Complete 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Time: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Services" >> $GITHUB_STEP_SUMMARY
+          docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" >> $GITHUB_STEP_SUMMARY

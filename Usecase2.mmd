@@ -1,0 +1,12 @@
+flowchart TD
+  U[ทำคลิป/เพลง 1 ชิ้น] --> IDEA[เลือกหัวข้อ/สไตล์]
+  IDEA --> SCRIPT[เขียนสคริปต์/โครงเพลง]
+  SCRIPT --> GEN[Generate: เสียง/ภาพ/ดนตรี/ซับ]
+  GEN --> ASSEM[Assemble: ตัดต่อ/มิกซ์]
+  ASSEM --> META[ทำ Title/Thumbnail/Description/Tags]
+  META --> PACK[Approval Pack ส่งให้คุณ]
+  PACK --> A{Approve?}
+  A -- No --> FIX[แก้ตามคอมเมนต์] --> PACK
+  A -- Yes --> UP[Upload: YouTube/Facebook]
+  UP --> ANALYZE[ดึงสถิติวิว/CTR/Retention]
+  ANALYZE --> LEARN[บันทึก lesson learned เข้า Memory]

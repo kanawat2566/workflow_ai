@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SSEEvent",
+  "description": "Server-Sent Event format: Orchestrator → Gateway → Frontend",
+  "type": "object",
+  "required": ["runId", "event", "data"],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "UUID of the current run"
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "agent_update",
+        "run_started",
+        "run_completed",
+        "run_failed",
+        "approval_required",
+        "approval_received",
+        "stream_token",
+        "log"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string",
+          "enum": [
+            "lead", "ba", "architect", "dev", "qa",
+            "executor", "evaluator", "rag", "memory",
+            "orchestrator", "system"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "running", "done", "failed", "skipped"]
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable status message (Thai or English)"
+        },
+        "token": {
+          "type": "string",
+          "description": "For stream_token events: partial LLM output"
+        },
+        "result": {
+          "type": "object",
+          "description": "Agent output when done"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message when failed"
+        },
+        "approvalPack": {
+          "$ref": "#/definitions/ApprovalPackRef"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ApprovalPackRef": {
+      "type": "object",
+      "properties": {
+        "runId": { "type": "string" },
+        "approvalUrl": { "type": "string" }
+      }
+    }
+  }
+}

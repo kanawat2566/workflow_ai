@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RetrieveResponse",
+  "description": "Output from RAG Service → Input to Orchestrator",
+  "type": "object",
+  "required": ["query", "chunks", "citations"],
+  "properties": {
+    "query": { "type": "string" },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chunkId", "file", "content", "score"],
+        "properties": {
+          "chunkId": { "type": "string" },
+          "file": { "type": "string" },
+          "type": { "type": "string" },
+          "content": { "type": "string" },
+          "score": {
+            "type": "number",
+            "description": "Relevance score 0-1 after re-ranking"
+          },
+          "metadata": { "type": "object" }
+        }
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "route": { "type": "string" },
+          "chunkId": { "type": "string" }
+        }
+      }
+    },
+    "totalFound": { "type": "integer" }
+  }
+}

@@ -1,0 +1,70 @@
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant GW as Gateway
+  participant OR as Orchestrator
+  participant MEM as Memory
+  participant WF as Workflow Engine
+  participant EX as Executor/Tools
+  participant EV as Evaluator
+  participant FS as Workspace FS
+  participant CI as Build/Test Runner
+  participant GIT as Git Provider
+  participant TG as Telegram/UI
+  participant AUD as Audit
+
+  U->>GW: "สร้าง web app Next.js + .NET API สำหรับ X"
+  GW->>AUD: log(command_received)
+  GW->>OR: forward(request)
+
+  OR->>MEM: get prefs (stack, style, standards)
+  MEM-->>OR: Next.js + .NET, patterns, naming
+  OR->>WF: start workflow(BuildWebApp, params)
+  WF-->>OR: workflow plan (steps + gates)
+
+  OR->>EX: scaffold repo (frontend/backend, env)
+  EX->>FS: generate project structure + configs
+  EX-->>OR: artifacts + diff
+
+  OR->>EX: implement (endpoints/pages/components)
+  EX->>FS: write code
+  EX-->>OR: diff
+
+  OR->>EX: generate tests + seed data
+  EX->>FS: add tests
+  EX-->>OR: diff
+
+  OR->>CI: run (lint, build, unit/integration tests)
+  CI-->>OR: results (pass/fail, logs)
+
+  OR->>EV: evaluate (coverage threshold, lint errors, security checks)
+  EV-->>OR: score + issues
+
+  alt Fail gate
+    OR->>EX: fix issues (based on CI logs)
+    EX-->>OR: patch
+    OR->>CI: re-run pipeline
+    CI-->>OR: pass
+  end
+
+  OR->>TG: Approval Pack (what built, how to run, screenshots/notes, diff)
+  TG-->>U: Approve/Reject
+
+  alt Approve
+    U->>TG: Approve
+    TG->>GW: approval ok
+    GW->>OR: forward
+    OR->>EX: create PR/commit
+    EX->>GIT: push + PR draft
+    GIT-->>EX: PR URL
+    EX-->>OR: PR URL
+    OR->>AUD: log(PR created)
+    OR->>TG: Notify PR URL + next steps
+  else Reject
+    U->>TG: Reject + comment
+    TG->>GW: reject
+    GW->>OR: forward
+    OR->>EX: revise based on comment
+    EX-->>OR: new pack
+    OR->>TG: send revised pack
+  end

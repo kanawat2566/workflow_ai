@@ -1,0 +1,70 @@
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant TG as Telegram/Chat UI
+  participant GW as Gateway API
+  participant OR as Orchestrator (Planner/Router)
+  participant MEM as Memory Service (facts+prefs)
+  participant RAG as RAG Service (Indexer+Retriever)
+  participant EX as Executor/Tools (Repo Ops)
+  participant EV as Evaluator (Quality Gate)
+  participant AUD as Audit/Observability
+  participant GIT as Git Provider (Local repo/Git server)
+  participant FS as Workspace FS
+
+  U->>TG: "ช่วยทำเอกสารจาก repo X branch Y"
+  TG->>GW: POST /commands (request, userId, ctx)
+  GW->>AUD: log(command_received)
+  GW->>OR: forward(request)
+
+  OR->>MEM: GET /memory/profile(userId)
+  MEM-->>OR: prefs, style, past decisions
+  OR->>RAG: POST /index/scan (repoRef, branch)
+  RAG->>GIT: fetch/clone shallow
+  GIT-->>RAG: repo snapshot
+  RAG->>FS: write snapshot to workspace
+  RAG-->>OR: inventory (projects, endpoints, models, deps)
+
+  OR->>RAG: POST /retrieve (keywords: "API, Controllers, DTO, DB")
+  RAG-->>OR: top chunks + citations
+
+  OR->>EX: POST /tools/generateDocs (workspace, templates, scope)
+  EX->>FS: create docs (README, API.md, ARCH.md, RUNBOOK.md)
+  EX-->>OR: artifacts (file list, diff)
+
+  OR->>EV: POST /evaluate/docs (artifacts, ruleset)
+  EV-->>OR: score, issues, missing endpoints?
+
+  alt quality gate not pass
+    OR->>EX: POST /tools/fixDocs (issues)
+    EX->>FS: patch docs
+    EX-->>OR: updated artifacts
+    OR->>EV: re-evaluate
+    EV-->>OR: pass
+  end
+
+  OR->>TG: Send Approval Pack (summary + diff + links)
+  TG-->>U: Approve/Reject buttons
+
+  alt User Reject
+    U->>TG: Reject + comment
+    TG->>GW: POST /approvals/reject (comment)
+    GW->>OR: forward(comment)
+    OR->>AUD: log(rejected)
+    OR->>EX: apply requested changes
+    EX-->>OR: revised pack
+    OR->>TG: send revised Approval Pack
+  else User Approve
+    U->>TG: Approve
+    TG->>GW: POST /approvals/approve
+    GW->>AUD: log(approved)
+    GW->>OR: forward(approved)
+
+    OR->>EX: POST /tools/createPR (branch, artifacts)
+    EX->>GIT: commit + push branch + open PR draft
+    GIT-->>EX: PR URL
+    EX-->>OR: PR URL + commit hash
+
+    OR->>AUD: log(executed, PR URL, hashes)
+    OR->>TG: Notify "PR Draft created" + link
+  end

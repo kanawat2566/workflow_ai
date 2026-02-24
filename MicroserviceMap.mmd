@@ -1,0 +1,13 @@
+flowchart TD
+  UI[Chat UI / Telegram] --> GW[Gateway API]
+  GW --> ORCH[Orchestrator]
+  ORCH --> WF[Workflow Engine]
+  ORCH --> MEM[Memory Service]
+  ORCH --> RAG[Knowledge/RAG Service]
+  ORCH --> EXE[Executor/Tools Service]
+
+  RAG --> VDB[(Vector DB)]
+  MEM --> SDB[(SQL/SQLite)]
+  EXE --> FS[(Workspace/Repo)]
+  EXE --> CI[Build/Test Runner]
+  ORCH --> AUD[Audit/Observability]

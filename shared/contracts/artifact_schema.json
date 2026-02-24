@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ArtifactResult",
+  "description": "Output from Executor Service → Orchestrator",
+  "type": "object",
+  "required": ["runId", "files", "diff"],
+  "properties": {
+    "runId": { "type": "string" },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "generateDocs",
+        "fixDocs",
+        "scaffold",
+        "implement",
+        "generateTests",
+        "createPR",
+        "uploadMedia"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "action"],
+        "properties": {
+          "path": { "type": "string" },
+          "action": {
+            "type": "string",
+            "enum": ["created", "modified", "deleted"]
+          },
+          "size": { "type": "integer" }
+        }
+      }
+    },
+    "diff": {
+      "type": "string",
+      "description": "Unified diff of all changes"
+    },
+    "prUrl": { "type": "string" },
+    "commitHash": { "type": "string" },
+    "branch": { "type": "string" },
+    "error": { "type": "string" }
+  }
+}

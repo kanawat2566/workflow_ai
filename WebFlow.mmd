@@ -1,0 +1,12 @@
+flowchart TD
+  U[ต้องการสร้างเว็บแอป] --> BA[เก็บ Requirement + User Stories]
+  BA --> DESIGN[Design: Architecture + DB Schema + API Spec]
+  DESIGN --> SCAFF[Scaffold: สร้างโครงโปรเจกต์]
+  SCAFF --> IMPL[Implement: API/Pages/Components]
+  IMPL --> TEST[Generate Tests + Seed Data]
+  TEST --> DOC[Generate Docs: README + API.md + Runbook]
+  DOC --> PACK[Approval Pack สรุป + ลิงก์ไฟล์ + diff]
+  PACK --> A{Approve?}
+  A -- No --> FIX[แก้ตามคอมเมนต์] --> PACK
+  A -- Yes --> BUILD[Build/Lint/Test]
+  BUILD --> DONE[ส่งมอบ Repo/Zip + คู่มือรัน]

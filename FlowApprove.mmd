@@ -1,0 +1,16 @@
+flowchart TD
+  U[User พิมพ์โจทย์ใน Chat/Telegram] --> P[Planner: แตกงานเป็นขั้นตอน]
+  P --> M[Memory: ดึงสิ่งที่ต้องจำ/สไตล์/บริบท]
+  P --> K[RAG: ค้นเอกสาร/โค้ด/สเปคที่เกี่ยวข้อง]
+  M --> D[Draft: สร้างแผน + ผลลัพธ์ฉบับร่าง]
+  K --> D
+  D --> G{ต้องอนุมัติไหม?}
+  G -- ใช่ --> T[ส่ง Approval Pack ไป Telegram/UI]
+  T --> A{User Approve?}
+  A -- ไม่อนุมัติ --> R[Revise: ปรับแก้ตามคอมเมนต์] --> D
+  A -- อนุมัติ --> X[Executor: เรียก Tools ทำงานจริง]
+  G -- ไม่ต้อง --> X
+  X --> L[Log/Audit: บันทึกว่าอะไรเกิดขึ้น]
+  L --> O[Output: ได้ไฟล์/โค้ด/เอกสาร/คลิป พร้อมใช้งาน]
+  O --> F[Feedback: กด Good/Bad + โน้ต]
+  F --> C[Curate Memory: สรุปสิ่งที่ควรจำไป Long-term]
