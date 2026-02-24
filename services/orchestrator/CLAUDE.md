@@ -100,4 +100,52 @@ MODEL_ROUTER = {
 }
 ```
 
+## Coding Standards
+อ่าน: `../../CODING_STANDARDS.md` — บังคับปฏิบัติตามทั้งหมด
+
+### Test Structure
+```
+services/orchestrator/
+├── src/orchestrator/
+│   ├── graphs/
+│   ├── agents/
+│   └── sse/
+└── tests/
+    ├── conftest.py          ← fixtures (mock_memory_client, mock_rag_client, mock_valkey)
+    ├── unit/
+    │   ├── test_lead_agent.py      ← test agent logic (mock LLM)
+    │   ├── test_ba_agent.py
+    │   ├── test_doc_gen_graph.py   ← test graph routing/state transitions
+    │   └── test_event_emitter.py   ← test SSE publish
+    └── integration/
+        └── test_run_api.py
+```
+
+### Test Naming
+```python
+# test_{agent/graph}_{scenario}_{expected}
+def test_lead_agent_assigns_tasks_to_all_team_members(): ...
+def test_doc_gen_graph_routes_to_approval_when_evaluator_passes(): ...
+def test_event_emitter_publishes_to_correct_valkey_channel(): ...
+```
+
+### LangGraph Test Pattern
+```python
+# test agent node function โดยตรง — ไม่ต้องรันทั้ง graph
+async def test_ba_agent_extracts_requirements_from_request():
+    # Arrange
+    mock_llm = AsyncMock()
+    mock_llm.invoke.return_value = "requirements: ..."
+    state = AgentState(run_id="r1", request="build payment module", ...)
+
+    # Act
+    result = await ba_agent(state, config={"llm": mock_llm})
+
+    # Assert
+    assert "requirements" in result
+```
+
+### Coverage
+รัน: `pytest tests/unit/ --cov=src --cov-fail-under=70`
+
 ## ห้ามแก้ไฟล์นอก working directory

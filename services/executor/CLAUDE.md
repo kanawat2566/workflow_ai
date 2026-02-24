@@ -72,4 +72,48 @@ templates/
 └── RUNBOOK.md.j2
 ```
 
+## Coding Standards
+อ่าน: `../../CODING_STANDARDS.md` — บังคับปฏิบัติตามทั้งหมด
+
+### Test Structure
+```
+services/executor/
+├── src/executor/
+│   ├── doc_generator.py
+│   ├── git_ops.py
+│   ├── scaffolder.py
+│   └── build_runner.py
+└── tests/
+    ├── conftest.py          ← fixtures (tmp_workspace, mock_git_repo, mock_github_client)
+    ├── unit/
+    │   ├── test_doc_generator.py  ← test Jinja2 rendering (ใช้ tmp_path)
+    │   ├── test_git_ops.py        ← test git commit/push (mock GitPython)
+    │   └── test_scaffolder.py     ← test project scaffold (ใช้ tmp_path)
+    └── integration/
+        └── test_executor_api.py
+```
+
+### Test Naming
+```python
+# test_{function}_{scenario}_{expected}
+def test_generate_readme_with_chunks_produces_all_sections(): ...
+def test_create_pr_with_valid_token_returns_pr_url(): ...
+def test_scaffold_nextjs_creates_correct_file_structure(): ...
+```
+
+### Key Test Cases
+```python
+def test_render_readme_template_includes_all_endpoints(tmp_path):
+    """Jinja2 template + chunk data → README.md มีครบทุก endpoint"""
+
+async def test_git_commit_uses_correct_author_from_env(mock_repo):
+    """GITHUB_TOKEN env var ถูกใช้ authenticate"""
+
+def test_generate_docs_raises_when_template_missing(tmp_path):
+    """template ไม่มี → TemplateNotFoundError"""
+```
+
+### Coverage
+รัน: `pytest tests/unit/ --cov=src --cov-fail-under=70`
+
 ## ห้ามแก้ไฟล์นอก working directory

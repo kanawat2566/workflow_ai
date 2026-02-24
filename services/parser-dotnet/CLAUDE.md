@@ -77,5 +77,75 @@ public class RouteEntry {
 }
 ```
 
+## Coding Standards
+อ่าน: `../../CODING_STANDARDS.md` — บังคับปฏิบัติตามทั้งหมด
+
+### Test Structure
+```
+services/parser-dotnet/
+├── Parser.API/
+│   └── Services/
+│       ├── RoslynParserService.cs
+│       └── RouteMapService.cs
+└── Parser.Tests/
+    ├── Parser.Tests.csproj
+    ├── Unit/
+    │   ├── RoslynParserServiceTests.cs  ← test parse logic with sample C# strings
+    │   ├── RouteMapServiceTests.cs      ← test route extraction
+    │   └── ChunkValidatorTests.cs       ← test ChunkDto validation
+    └── Integration/
+        └── ParseControllerTests.cs      ← test with WebApplicationFactory
+```
+
+### Test Naming (xUnit)
+```csharp
+// {Method}_{Scenario}_{ExpectedBehavior}
+ParseFileAsync_WithHttpPostAction_ReturnsChunkWithCorrectId()
+ParseFileAsync_WithEmptyFile_ReturnsEmptyArray()
+ExtractRoutes_WithAreaAttribute_IncludesAreaInRoute()
+ValidateChunk_WithEmptyContent_ThrowsArgumentException()
+```
+
+### Key Test Cases
+```csharp
+[Fact]
+public async Task ParseFileAsync_WithControllerAction_ExtractsCorrectHttpMethod()
+{
+    // Arrange — ใช้ inline C# string แทนไฟล์จริง
+    const string code = @"
+        public class PaymentController : Controller {
+            [HttpPost]
+            public IActionResult Save(PaymentViewModel m) => View();
+        }";
+
+    // Act
+    var chunks = await _service.ParseFileAsync(code, "PaymentController.cs");
+
+    // Assert
+    Assert.Single(chunks);
+    Assert.Equal("POST", chunks[0].Metadata["httpMethod"]);
+}
+
+[Theory]
+[InlineData("[HttpGet]", "GET")]
+[InlineData("[HttpPost]", "POST")]
+[InlineData("[HttpPut]", "PUT")]
+[InlineData("[HttpDelete]", "DELETE")]
+public async Task ParseFileAsync_WithDifferentHttpAttributes_ExtractsCorrectMethod(
+    string attribute, string expectedMethod) { ... }
+```
+
+### NuGet Test Packages
+```xml
+<PackageReference Include="xunit" Version="2.*" />
+<PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+<PackageReference Include="Moq" Version="4.*" />
+<PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.*" />
+<PackageReference Include="coverlet.collector" Version="6.*" />
+```
+
+### Coverage
+รัน: `dotnet test --collect:"XPlat Code Coverage"` → ต้องได้ ≥ 70%
+
 ## ห้ามแก้ไฟล์นอก working directory
 ถ้าต้องการเปลี่ยน contract → แจ้ง human ก่อน

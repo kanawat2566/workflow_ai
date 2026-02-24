@@ -1,0 +1,75 @@
+flowchart TD
+    START([🚀 เริ่ม: feat/parser-dotnet]) --> P0
+
+    subgraph P0["📁 Phase 0 — Project Setup"]
+        P0A["1.1 สร้าง Parser.sln\n+ Parser.API.csproj\n+ Parser.Tests.csproj"]
+        P0B["1.2 เพิ่ม NuGet packages\nRoslyn + xUnit + Moq\n+ coverlet"]
+        P0A --> P0B
+    end
+
+    P0 --> P1
+
+    subgraph P1["📦 Phase 1 — Models & Interfaces"]
+        P1A["1.3 ChunkDto.cs\n(ตาม chunk_schema.json)"]
+        P1B["1.4 RouteEntry.cs\nParseStats.cs\nRequest/Response models"]
+        P1C["1.5 IRoslynParserService.cs\nIRouteMapService.cs\n(Interfaces สำหรับ DI)"]
+        P1A --> P1B --> P1C
+    end
+
+    P1 --> P2
+
+    subgraph P2["⚙️ Phase 2 — Services (Core Logic)"]
+        P2A["1.6 RoslynParserService.cs\n• Parse C# Controllers\n• Parse ViewModels / EF Models\n• Parse Razor .cshtml\n• Parse JS functions + $.ajax"]
+        P2B["1.7 RouteMapService.cs\n• Extract MVC routes\n• Map Controller→Action→View"]
+        P2A --> P2B
+    end
+
+    P2 --> P3
+
+    subgraph P3["🌐 Phase 3 — API Layer"]
+        P3A["1.8 ParseController.cs\nPOST /parse/repo\nPOST /parse/file\nGET  /parse/routes\nPOST /parse/incremental"]
+        P3B["1.9 HealthController.cs\nGET /health → {status: ok}"]
+        P3C["1.10 Program.cs\nDI setup + port 5100\nGlobal Exception Middleware\n#nullable enable"]
+        P3A --> P3C
+        P3B --> P3C
+    end
+
+    P3 --> P4
+
+    subgraph P4["🧪 Phase 4 — Tests (≥70% coverage)"]
+        P4A["1.11 Unit/RoslynParserServiceTests.cs\n• ParseFileAsync_WithHttpPost_...\n• ParseFileAsync_WithEmptyFile_...\n• [Theory] HttpGet/Post/Put/Delete"]
+        P4B["1.12 Unit/RouteMapServiceTests.cs\n• ExtractRoutes_WithAreaAttribute_...\n• ExtractRoutes_WithNoController_..."]
+        P4C["1.13 Unit/ChunkValidatorTests.cs\n• ValidateChunk_EmptyContent_Throws\n• ValidateChunk_ValidData_ReturnsTrue"]
+        P4D["1.14 Integration/ParseControllerTests.cs\n• WebApplicationFactory\n• POST /parse/file → 200 + chunks\n• POST /parse/repo → routeMap"]
+        P4A --> P4D
+        P4B --> P4D
+        P4C --> P4D
+    end
+
+    P4 --> P5
+
+    subgraph P5["🐳 Phase 5 — Docker & Contract"]
+        P5A["1.15 ตรวจสอบ dotnet.Dockerfile\nbuild สำเร็จใน local"]
+        P5B["1.16 tests/contract/validate_schema.sh\nตรวจ output vs chunk_schema.json"]
+        P5A --> P5B
+    end
+
+    P5 --> GIT
+
+    subgraph GIT["🔁 Git Loop"]
+        G1["git add + commit\nfeat/parser-dotnet"]
+        G2{"CI Pass?\n6 Gates"}
+        G3["❌ Fix:\nFormat / Build\nTest / Coverage"]
+        G4["✅ เปิด PR\nfeat/parser-dotnet → main"]
+        G5{"Quality Gate\nPass?"}
+        G6["✅ Merge to main"]
+        G1 --> G2
+        G2 -->|ไม่ผ่าน| G3
+        G3 --> G1
+        G2 -->|ผ่าน| G4
+        G4 --> G5
+        G5 -->|ไม่ผ่าน| G3
+        G5 -->|ผ่าน| G6
+    end
+
+    G6 --> DONE([✅ Parser Service พร้อมใช้งาน\nport 5100])

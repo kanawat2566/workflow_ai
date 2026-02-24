@@ -71,4 +71,78 @@ export async function GET(req, { params }) {
 }
 ```
 
+## Coding Standards
+อ่าน: `../CODING_STANDARDS.md` — บังคับปฏิบัติตามทั้งหมด
+
+### Test Structure
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── AgentProgressBoard.tsx
+│   │   ├── ApprovalPack.tsx
+│   │   └── ...
+│   └── hooks/
+│       └── useAgentStream.ts
+└── __tests__/
+    ├── components/
+    │   ├── AgentProgressBoard.test.tsx  ← test render + SSE updates
+    │   ├── ApprovalPack.test.tsx        ← test render approval data
+    │   ├── ApprovalButtons.test.tsx     ← test approve/reject click
+    │   └── FeedbackBar.test.tsx         ← test rating selection
+    └── hooks/
+        └── useAgentStream.test.ts       ← test SSE event handling
+```
+
+### Test Naming
+```typescript
+// Describe: component/hook name
+// It: "should {expected} when {scenario}"
+describe("AgentProgressBoard", () => {
+  it("should render all agents as waiting initially", () => { ... });
+  it("should update agent status when SSE event received", () => { ... });
+  it("should show completion state when all agents are done", () => { ... });
+});
+
+describe("useAgentStream", () => {
+  it("should close EventSource on unmount to prevent memory leak", () => { ... });
+  it("should parse SSE event and update agent state", () => { ... });
+});
+```
+
+### Key Test Cases
+```typescript
+// Component test — ตรวจ render
+it("should display quality score in approval pack", () => {
+  render(<ApprovalPack data={mockApprovalPack} />);
+  expect(screen.getByText("87/100")).toBeInTheDocument();
+});
+
+// Interaction test — ตรวจ click
+it("should call approve API when approve button clicked", async () => {
+  const mockApprove = vi.fn();
+  render(<ApprovalButtons runId="r1" onApprove={mockApprove} />);
+  await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+  expect(mockApprove).toHaveBeenCalledWith("r1");
+});
+
+// Hook test — ตรวจ SSE
+it("should update agents list when agent_update event received", () => {
+  const { result } = renderHook(() => useAgentStream("run-1"));
+  act(() => mockEventSource.emit("message", { data: JSON.stringify(sseEvent) }));
+  expect(result.current.agents[0].status).toBe("running");
+});
+```
+
+### Test Config (vitest.config.ts หรือ jest.config.js)
+```typescript
+// coverage threshold บังคับ
+coverage: {
+  thresholds: { lines: 70, functions: 70, branches: 70 }
+}
+```
+
+### Coverage
+รัน: `npm run test:coverage` → ต้องได้ ≥ 70%
+
 ## ห้ามแก้ไฟล์นอก working directory

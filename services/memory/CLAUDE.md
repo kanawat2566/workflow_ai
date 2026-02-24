@@ -39,4 +39,44 @@ GET /metrics/{userId}
 GET /health
 ```
 
+## Coding Standards
+อ่าน: `../../CODING_STANDARDS.md` — บังคับปฏิบัติตามทั้งหมด
+
+### Test Structure
+```
+services/memory/
+├── src/memory/
+│   ├── profile.py
+│   ├── curation.py
+│   └── models.py
+└── tests/
+    ├── conftest.py          ← fixtures (mock_db_session, mock_mem0, sample_user_profile)
+    ├── unit/
+    │   ├── test_profile.py      ← test get/update user profile
+    │   ├── test_curation.py     ← test feedback → lesson extraction
+    │   └── test_metrics.py      ← test score calculation
+    └── integration/
+        └── test_memory_api.py   ← test with actual SQLite in-memory
+```
+
+### Test Naming
+```python
+# test_{function}_{scenario}_{expected}
+def test_curate_bad_feedback_extracts_lesson_and_stores(): ...
+def test_get_profile_returns_empty_profile_when_user_not_found(): ...
+def test_update_metrics_increments_total_runs(): ...
+```
+
+### Key Test Cases
+```python
+async def test_curate_good_feedback_stores_pattern_in_mem0():
+    """rating=good → Mem0 stores pattern → profile updated"""
+
+async def test_curate_bad_feedback_extracts_lesson_via_llm():
+    """rating=bad → LLM extracts lesson → memory_entries inserted"""
+```
+
+### Coverage
+รัน: `pytest tests/unit/ --cov=src --cov-fail-under=70`
+
 ## ห้ามแก้ไฟล์นอก working directory

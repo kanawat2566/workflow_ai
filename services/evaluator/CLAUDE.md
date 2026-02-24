@@ -49,4 +49,60 @@ score -= 3  * len(missing_endpoints)
 passed = score >= 75
 ```
 
+## Coding Standards
+อ่าน: `../../CODING_STANDARDS.md` — บังคับปฏิบัติตามทั้งหมด
+
+### Test Structure
+```
+services/evaluator/
+├── src/evaluator/
+│   ├── doc_evaluator.py
+│   ├── code_evaluator.py
+│   └── score_calculator.py
+└── tests/
+    ├── conftest.py          ← fixtures (mock_llm_client, sample_artifacts, sample_rules)
+    ├── unit/
+    │   ├── test_score_calculator.py   ← test pure score math (no mock needed)
+    │   ├── test_doc_evaluator.py      ← test section detection (mock LLM)
+    │   └── test_code_evaluator.py     ← test lint/coverage parsing
+    └── integration/
+        └── test_evaluate_api.py
+```
+
+### Test Naming
+```python
+# test_{function}_{scenario}_{expected}
+def test_calculate_score_with_3_missing_sections_returns_70(): ...
+def test_evaluate_docs_when_section_empty_deducts_points(): ...
+def test_evaluate_docs_when_all_sections_complete_returns_passed(): ...
+```
+
+### Key Test Cases
+```python
+def test_score_calculator_with_no_issues_returns_100():
+    """score = 100 เมื่อไม่มี missing/empty sections"""
+
+def test_score_calculator_below_75_returns_not_passed():
+    """score < 75 → passed = False"""
+
+async def test_doc_evaluator_detects_missing_api_section(mock_llm):
+    """artifact ไม่มี API Endpoints section → issues มี 'missing_api_section'"""
+```
+
+### Score Logic Test (pure function — ไม่ต้อง mock)
+```python
+@pytest.mark.parametrize("missing,empty,endpoints,expected_score,expected_passed", [
+    (0, 0, 0, 100, True),
+    (2, 1, 3, 65, False),   # 100 - 20 - 5 - 9 = 66 → ปัดลง
+    (5, 0, 0, 50, False),
+])
+def test_calculate_score_parametrized(missing, empty, endpoints, expected_score, expected_passed):
+    result = calculate_score(missing, empty, endpoints)
+    assert result.score == expected_score
+    assert result.passed == expected_passed
+```
+
+### Coverage
+รัน: `pytest tests/unit/ --cov=src --cov-fail-under=70`
+
 ## ห้ามแก้ไฟล์นอก working directory
