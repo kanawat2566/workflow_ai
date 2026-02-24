@@ -85,4 +85,55 @@ public class RoslynParserServiceTests
         Assert.Contains("CardNumber", chunks[0].Metadata.ViewModel!.Properties);
         Assert.Contains("Amount", chunks[0].Metadata.ViewModel!.Properties);
     }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithRazorView_ReturnsRazorChunk()
+    {
+        // Arrange
+        const string razor = """
+            @model PaymentViewModel
+            @Html.BeginForm("Save", "Payment", FormMethod.Post)
+            @Html.Partial("_Summary")
+            """;
+
+        // Act
+        var chunks = await CreateService().ParseSourceAsync(razor, "Save.cshtml");
+
+        // Assert
+        Assert.Single(chunks);
+        Assert.Equal(ChunkType.razor_view, chunks[0].Type);
+        Assert.Equal("PaymentViewModel", chunks[0].Metadata.ViewModel!.Name);
+        Assert.Contains("_Summary", chunks[0].Metadata.PartialsUsed);
+    }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithJavaScript_ReturnsJsChunks()
+    {
+        // Arrange
+        const string js = """
+            function submitForm() {
+                $.ajax({ url: '/Payment/Save', type: 'POST' });
+            }
+            $('#btn').on('click', function() {});
+            """;
+
+        // Act
+        var chunks = await CreateService().ParseSourceAsync(js, "payment.js");
+
+        // Assert
+        Assert.NotEmpty(chunks);
+        Assert.Contains(chunks, c => c.Type == ChunkType.js_function);
+        Assert.Contains(chunks, c => c.Type == ChunkType.js_ajax_call);
+        Assert.Contains(chunks, c => c.Type == ChunkType.js_event_handler);
+    }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithUnknownExtension_ReturnsEmptyList()
+    {
+        // Act
+        var chunks = await CreateService().ParseSourceAsync("some content", "file.txt");
+
+        // Assert
+        Assert.Empty(chunks);
+    }
 }
