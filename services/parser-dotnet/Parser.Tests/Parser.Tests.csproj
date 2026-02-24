@@ -30,4 +30,11 @@
     <ProjectReference Include="..\Parser.API\Parser.API.csproj" />
   </ItemGroup>
 
+  <!-- Override transitive packages to patched versions to satisfy security scan -->
+  <ItemGroup>
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <!-- Use framework-provided System.Text.Json for net8.0 (avoid pinning to a vulnerable version) -->
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+  </ItemGroup>
+
 </Project>
