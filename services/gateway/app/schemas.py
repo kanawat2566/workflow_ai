@@ -1,22 +1,29 @@
-from pydantic import BaseModel
-from typing import Optional, Literal
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class CommandRequest(BaseModel):
-    userId: str
+    user_id: str = Field(alias="userId")
     request: str
-    useCase: Optional[str] = None
-    source: Optional[Literal["telegram", "web"]] = "web"
+    use_case: str | None = Field(default=None, alias="useCase")
+    source: Literal["telegram", "web"] | None = "web"
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class CommandResponse(BaseModel):
-    runId: str
+    run_id: str = Field(alias="runId")
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class ApprovalRequest(BaseModel):
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class FeedbackRequest(BaseModel):
     rating: Literal["good", "bad"]
-    notes: Optional[str] = None
+    notes: str | None = None

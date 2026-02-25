@@ -1,12 +1,18 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
 import asyncio
 import json
+import logging
+
 import httpx
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import settings
-from .schemas import CommandRequest, ApprovalRequest, FeedbackRequest
+from .schemas import ApprovalRequest, CommandRequest, FeedbackRequest
 from .valkey_client import ValkeyClient
+
+logger = logging.getLogger(__name__)
+
+_NON_JSON_WARN = "Non-JSON response from orchestrator (status=%s)"
 
 app = FastAPI(title="gateway")
 
@@ -23,11 +29,11 @@ async def shutdown():
     try:
         await app.state.http.aclose()
     except Exception:
-        pass
+        logger.warning("Failed to close HTTP client", exc_info=True)
     try:
         await app.state.valkey.close()
     except Exception:
-        pass
+        logger.warning("Failed to close Valkey connection", exc_info=True)
 
 
 @app.get("/health")
@@ -39,12 +45,13 @@ async def health():
 async def post_commands(cmd: CommandRequest):
     url = settings.ORCHESTRATOR_URL.rstrip("/") + settings.ORCHESTRATOR_COMMANDS_PATH
     try:
-        resp = await app.state.http.post(url, json=cmd.dict())
+        resp = await app.state.http.post(url, json=cmd.dict(by_alias=True))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     try:
         data = resp.json()
-    except Exception:
+    except ValueError:
+        logger.warning(_NON_JSON_WARN, resp.status_code)
         data = {"status_code": resp.status_code}
     return JSONResponse(status_code=resp.status_code, content=data)
 
@@ -55,10 +62,11 @@ async def approve(run_id: str, body: ApprovalRequest):
     try:
         resp = await app.state.http.post(url, json=body.dict())
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     try:
         content = resp.json()
-    except Exception:
+    except ValueError:
+        logger.warning(_NON_JSON_WARN, resp.status_code)
         content = {"status_code": resp.status_code}
     return JSONResponse(status_code=resp.status_code, content=content)
 
@@ -69,10 +77,11 @@ async def reject(run_id: str, body: ApprovalRequest):
     try:
         resp = await app.state.http.post(url, json=body.dict())
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     try:
         content = resp.json()
-    except Exception:
+    except ValueError:
+        logger.warning(_NON_JSON_WARN, resp.status_code)
         content = {"status_code": resp.status_code}
     return JSONResponse(status_code=resp.status_code, content=content)
 
@@ -83,7 +92,7 @@ async def feedback(run_id: str, body: FeedbackRequest):
     try:
         resp = await app.state.http.post(url, json=body.dict())
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     return JSONResponse(status_code=resp.status_code, content={})
 
 
@@ -93,10 +102,11 @@ async def get_run(run_id: str):
     try:
         resp = await app.state.http.get(url)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     try:
         content = resp.json()
-    except Exception:
+    except ValueError:
+        logger.warning(_NON_JSON_WARN, resp.status_code)
         content = {"status_code": resp.status_code}
     return JSONResponse(status_code=resp.status_code, content=content)
 
