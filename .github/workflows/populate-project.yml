@@ -1,0 +1,411 @@
+name: Populate Project Board
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_number:
+        description: "GitHub Project number (ดูจาก URL ของ project เช่น /projects/1)"
+        required: true
+        default: "1"
+
+jobs:
+  populate:
+    name: Create Issues & Populate Project Board
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    env:
+      GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+      OWNER: ${{ github.repository_owner }}
+      REPO: ${{ github.event.repository.name }}
+      PROJECT_NUMBER: ${{ github.event.inputs.project_number }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ─── สร้าง Labels ─────────────────────────────────────────────────────────
+      - name: Create labels
+        run: |
+          R="$OWNER/$REPO"
+          # Service labels (blue tones → green tones → red/purple tones)
+          gh label create "service:parser"       --color "0075ca" --force --repo "$R" 2>/dev/null || true  # blue
+          gh label create "service:rag"          --color "e4e669" --force --repo "$R" 2>/dev/null || true  # yellow
+          gh label create "service:orchestrator" --color "d93f0b" --force --repo "$R" 2>/dev/null || true  # orange-red
+          gh label create "service:executor"     --color "0e8a16" --force --repo "$R" 2>/dev/null || true  # green
+          gh label create "service:evaluator"    --color "5319e7" --force --repo "$R" 2>/dev/null || true  # purple
+          gh label create "service:gateway"      --color "f9d0c4" --force --repo "$R" 2>/dev/null || true  # pink
+          gh label create "service:memory"       --color "fef2c0" --force --repo "$R" 2>/dev/null || true  # pale-yellow
+          gh label create "service:bot"          --color "c2e0c6" --force --repo "$R" 2>/dev/null || true  # pale-green
+          gh label create "service:frontend"     --color "1d76db" --force --repo "$R" 2>/dev/null || true  # dark-blue
+          gh label create "service:infra"        --color "b60205" --force --repo "$R" 2>/dev/null || true  # dark-red
+          # Priority labels
+          gh label create "priority:high"        --color "d93f0b" --force --repo "$R" 2>/dev/null || true  # red
+          gh label create "priority:medium"      --color "e4e669" --force --repo "$R" 2>/dev/null || true  # yellow
+          gh label create "priority:low"         --color "0075ca" --force --repo "$R" 2>/dev/null || true  # blue
+          echo "✅ Labels created"
+
+      # ─── Helper: สร้าง issue แล้ว add เข้า project ───────────────────────────
+      - name: Create issues and add to project
+        shell: bash
+        run: |
+          set -e
+
+          # ── Resolve project metadata once (reused for every issue) ───────────
+          echo "🔍 Looking up project #${PROJECT_NUMBER} ..."
+          proj_add_err=""
+          proj_id=$(gh project list --owner "$OWNER" --format json 2>/tmp/proj_err | \
+            jq -r ".projects[] | select(.number==$PROJECT_NUMBER) | .id" 2>/dev/null || true)
+          if [ -z "$proj_id" ]; then
+            proj_add_err=$(cat /tmp/proj_err 2>/dev/null || echo "project not found")
+            echo "  ⚠️  Project #${PROJECT_NUMBER} not found: ${proj_add_err}"
+            echo "       Issues will still be created; add them to the board manually."
+            echo "       Tip: create a secret GH_PAT with 'project' scope for full access."
+          fi
+
+          proj_info=$(gh project field-list "$PROJECT_NUMBER" \
+            --owner "$OWNER" --format json 2>/dev/null || echo "{}")
+          status_field_id=$(echo "$proj_info" | \
+            jq -r '.fields[]? | select(.name=="Status") | .id' 2>/dev/null || true)
+
+          add_to_project() {
+            local issue_url="$1"
+            local status="$2"   # Accepted values: Todo | In progress | Done
+
+            if [ -z "$proj_id" ]; then
+              return 0
+            fi
+
+            item_id=$(gh project item-add "$PROJECT_NUMBER" \
+              --owner "$OWNER" \
+              --url "$issue_url" \
+              --format json 2>/tmp/item_err | jq -r '.id // empty') || true
+
+            if [ -z "$item_id" ]; then
+              echo "  ⚠️  Could not add to project board: $(cat /tmp/item_err 2>/dev/null)"
+              return 0
+            fi
+
+            echo "  ✅ Added to project (item: $item_id)"
+
+            if [ -n "$status_field_id" ] && [ -n "$proj_id" ]; then
+              option_id=$(echo "$proj_info" | \
+                jq -r ".fields[]? | select(.name==\"Status\") | .options[]? | select(.name==\"$status\") | .id" \
+                2>/dev/null || true)
+              if [ -n "$option_id" ]; then
+                gh project item-edit \
+                  --id "$item_id" \
+                  --field-id "$status_field_id" \
+                  --project-id "$proj_id" \
+                  --single-select-option-id "$option_id" 2>/tmp/edit_err || \
+                  echo "  ⚠️  Could not set status: $(cat /tmp/edit_err 2>/dev/null)"
+              fi
+            fi
+          }
+
+          create_issue() {
+            local title="$1"
+            local body="$2"
+            local label1="$3"
+            local label2="$4"
+            local status="${5:-Todo}"
+
+            echo "📝 Creating: $title"
+            url=$(gh issue create \
+              --title "$title" \
+              --body "$body" \
+              --label "$label1" \
+              --label "$label2" \
+              --repo "$OWNER/$REPO" 2>/tmp/issue_err) || {
+              echo "  ❌ Failed to create issue: $(cat /tmp/issue_err 2>/dev/null)"; return 0
+            }
+            echo "  🔗 $url"
+            add_to_project "$url" "$status"
+            echo ""
+          }
+
+          # ─── AI-1: .NET Roslyn Parser ────────────────────────────────────────
+          create_issue \
+            "[AI-1] 🔵 สร้าง .NET Roslyn Parser Service" \
+            "## เป้าหมาย
+          สร้าง service สำหรับ parse ASP.NET MVC codebase โดยใช้ Roslyn compiler API
+
+          ## Working Directory
+          \`services/parser-dotnet/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง Microsoft.CodeAnalysis (Roslyn)
+          - [ ] สร้าง endpoint \`POST /parse/repo\` — parse ทั้ง repository
+          - [ ] สร้าง endpoint \`POST /parse/file\` — parse ไฟล์เดียว
+          - [ ] สร้าง endpoint \`GET /parse/routes\` — extract route map
+          - [ ] สร้าง endpoint \`POST /parse/incremental\` — parse เฉพาะไฟล์ที่เปลี่ยน
+          - [ ] สร้าง endpoint \`GET /health\`
+          - [ ] Parse: C# controllers, ViewModels, Razor views, JavaScript/jQuery
+          - [ ] Output: chunk_schema.json ตาม contract
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`5100\`
+
+          ## Contract Reference
+          \`shared/contracts/chunk_schema.json\`" \
+            "service:parser" \
+            "priority:high" \
+            "Todo"
+
+          # ─── AI-2: RAG + Embedding ───────────────────────────────────────────
+          create_issue \
+            "[AI-2] 🟡 สร้าง RAG + Embedding Service" \
+            "## เป้าหมาย
+          สร้าง Retrieval-Augmented Generation service สำหรับ context search
+
+          ## Working Directory
+          \`services/rag/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง LlamaIndex, Qdrant, OpenSearch
+          - [ ] สร้าง endpoint \`POST /index/scan\` — index ทั้ง repo
+          - [ ] สร้าง endpoint \`POST /index/incremental\` — index เฉพาะ chunk ใหม่
+          - [ ] สร้าง endpoint \`POST /retrieve\` — hybrid search (semantic + BM25)
+          - [ ] สร้าง endpoint \`GET /health\`
+          - [ ] Embedding model: BGE หรือ OpenRouter
+          - [ ] Re-rank ด้วย BGE-Reranker
+          - [ ] Output: retrieve_schema.json ตาม contract
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`8002\`
+
+          ## Contract Reference
+          \`shared/contracts/retrieve_schema.json\`" \
+            "service:rag" \
+            "priority:high" \
+            "Todo"
+
+          # ─── AI-3: LangGraph Orchestrator ───────────────────────────────────
+          create_issue \
+            "[AI-3] 🟠 สร้าง LangGraph Orchestrator Service" \
+            "## เป้าหมาย
+          สร้าง workflow engine หลักโดยใช้ LangGraph + Temporal
+
+          ## Working Directory
+          \`services/orchestrator/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง LangGraph, Temporal SDK
+          - [ ] สร้าง endpoint \`POST /run\` — เริ่ม workflow
+          - [ ] สร้าง endpoint \`GET /run/{runId}/status\` — ดู status
+          - [ ] สร้าง endpoint \`POST /run/{runId}/approve\` — approve
+          - [ ] สร้าง endpoint \`POST /run/{runId}/reject\` — reject
+          - [ ] สร้าง endpoint \`GET /health\`
+          - [ ] Workflow: doc_generation, bot_team, web_app_creation, media_generation
+          - [ ] Multi-agent parallel: BA / Architect / Dev / QA
+          - [ ] SSE events ผ่าน Valkey pub/sub
+          - [ ] LLM routing ตาม task type
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`8001\`
+
+          ## Contract Reference
+          \`shared/contracts/agent_state.py\`, \`shared/contracts/sse_events.json\`" \
+            "service:orchestrator" \
+            "priority:high" \
+            "Todo"
+
+          # ─── AI-4: Executor ──────────────────────────────────────────────────
+          create_issue \
+            "[AI-4] 🟢 สร้าง Executor Service" \
+            "## เป้าหมาย
+          สร้าง service สำหรับ execute งานบน file system และ Git
+
+          ## Working Directory
+          \`services/executor/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง GitPython, PyGithub, Jinja2, Docker SDK
+          - [ ] สร้าง endpoint \`POST /tools/generateDocs\`
+          - [ ] สร้าง endpoint \`POST /tools/scaffold\`
+          - [ ] สร้าง endpoint \`POST /tools/implement\`
+          - [ ] สร้าง endpoint \`POST /tools/generateTests\`
+          - [ ] สร้าง endpoint \`POST /tools/createPR\`
+          - [ ] สร้าง endpoint \`POST /tools/build\`
+          - [ ] สร้าง endpoint \`GET /health\`
+          - [ ] Output: artifact_schema.json ตาม contract
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`8004\`
+
+          ## Contract Reference
+          \`shared/contracts/artifact_schema.json\`, \`shared/contracts/approval_pack.json\`" \
+            "service:executor" \
+            "priority:high" \
+            "Todo"
+
+          # ─── AI-4: Evaluator ─────────────────────────────────────────────────
+          create_issue \
+            "[AI-4] 🟣 สร้าง Evaluator Quality Gate Service" \
+            "## เป้าหมาย
+          สร้าง service สำหรับประเมินคุณภาพ artifacts (docs, code)
+
+          ## Working Directory
+          \`services/evaluator/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง OpenRouter LLM (deepseek-r1 as judge)
+          - [ ] สร้าง endpoint \`POST /evaluate/docs\`
+          - [ ] สร้าง endpoint \`POST /evaluate/code\`
+          - [ ] สร้าง endpoint \`POST /evaluate/approval-pack\`
+          - [ ] สร้าง endpoint \`GET /health\`
+          - [ ] Scoring: 100 base; -10 missing section, -5 empty, -3 missing endpoint
+          - [ ] Pass threshold: ≥ 75 คะแนน
+          - [ ] Fix iteration loop (max 3 รอบ)
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`8005\`" \
+            "service:evaluator" \
+            "priority:high" \
+            "Todo"
+
+          # ─── AI-5: Gateway ───────────────────────────────────────────────────
+          create_issue \
+            "[AI-5] 🩷 สร้าง API Gateway Service" \
+            "## เป้าหมาย
+          สร้าง API entry point หลักและ SSE event stream
+
+          ## Working Directory
+          \`services/gateway/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง FastAPI, Valkey pub/sub, httpx
+          - [ ] สร้าง endpoint \`POST /commands\`
+          - [ ] สร้าง endpoint \`POST /approvals/{runId}/approve\`
+          - [ ] สร้าง endpoint \`POST /approvals/{runId}/reject\`
+          - [ ] สร้าง endpoint \`POST /feedback/{runId}\`
+          - [ ] สร้าง endpoint \`GET /stream/{runId}\` (SSE)
+          - [ ] สร้าง endpoint \`GET /run/{runId}\`
+          - [ ] สร้าง endpoint \`GET /health\`
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`8000\`" \
+            "service:gateway" \
+            "priority:high" \
+            "Todo"
+
+          # ─── AI-5: Memory ────────────────────────────────────────────────────
+          create_issue \
+            "[AI-5] 🟨 สร้าง Memory Service" \
+            "## เป้าหมาย
+          สร้าง service สำหรับเก็บ user preferences, feedback patterns, metrics
+
+          ## Working Directory
+          \`services/memory/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง Mem0, SQLAlchemy 2.x, Alembic, PostgreSQL, Valkey
+          - [ ] สร้าง DB schema: user_profiles, memory_entries, run_metrics
+          - [ ] สร้าง endpoint \`GET /memory/profile/{userId}\`
+          - [ ] สร้าง endpoint \`POST /memory/curate\`
+          - [ ] สร้าง endpoint \`GET /metrics/{userId}\`
+          - [ ] สร้าง endpoint \`GET /health\`
+          - [ ] memory_entries types: fact, preference, lesson, pattern
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`8003\`" \
+            "service:memory" \
+            "priority:medium" \
+            "Todo"
+
+          # ─── AI-5: Telegram Bot ──────────────────────────────────────────────
+          create_issue \
+            "[AI-5] 🟩 สร้าง Telegram Bot Service" \
+            "## เป้าหมาย
+          สร้าง Telegram bot interface สำหรับ user interaction
+
+          ## Working Directory
+          \`services/telegram-bot/\`
+
+          ## งานที่ต้องทำ
+          - [ ] ติดตั้ง Aiogram 3.x, httpx
+          - [ ] สร้าง command: \`/start\`
+          - [ ] สร้าง command: \`/doc <repo_url>\`
+          - [ ] สร้าง command: \`/build <desc>\`
+          - [ ] สร้าง command: \`/spec <desc>\`
+          - [ ] สร้าง command: \`/status <runId>\`
+          - [ ] สร้าง command: \`/history\`
+          - [ ] Approval pack formatter
+          - [ ] Unit tests coverage ≥ 70%
+          - [ ] Dockerfile
+
+          ## Port
+          \`8006\`" \
+            "service:bot" \
+            "priority:medium" \
+            "Todo"
+
+          # ─── AI-6: Frontend ──────────────────────────────────────────────────
+          create_issue \
+            "[AI-6] 🔷 สร้าง Next.js Web Interface" \
+            "## เป้าหมาย
+          สร้าง web UI สำหรับ user interaction และ approval workflows
+
+          ## Working Directory
+          \`frontend/\`
+
+          ## งานที่ต้องทำ
+          - [ ] Setup Next.js 16 App Router
+          - [ ] หน้า Dashboard — แสดง run history
+          - [ ] หน้า Run — เริ่ม workflow ใหม่
+          - [ ] หน้า Approval — review และ approve/reject artifacts
+          - [ ] Real-time updates ผ่าน SSE (\`GET /stream/{runId}\`)
+          - [ ] หน้า Feedback — ให้ feedback หลัง run เสร็จ
+          - [ ] Responsive design
+          - [ ] Unit/component tests
+          - [ ] Dockerfile
+
+          ## Port
+          \`3000\`" \
+            "service:frontend" \
+            "priority:medium" \
+            "Todo"
+
+          # ─── AI-7: Infrastructure ────────────────────────────────────────────
+          create_issue \
+            "[AI-7] 🔴 Setup Docker Compose & DevOps Infrastructure" \
+            "## เป้าหมาย
+          ตั้งค่า Docker Compose สำหรับ development และ production environment
+
+          ## Working Directory
+          \`infra/\`, root
+
+          ## งานที่ต้องทำ
+          - [ ] docker-compose.yml สำหรับ dev (ครบทุก service)
+          - [ ] docker-compose.prod.yml สำหรับ production
+          - [ ] .env.example ครบถ้วน
+          - [ ] Dockerfile สำหรับ Python services (shared base image)
+          - [ ] Dockerfile สำหรับ .NET Parser
+          - [ ] Dockerfile สำหรับ Frontend
+          - [ ] Setup: Qdrant, PostgreSQL, Valkey, Temporal, Langfuse, OpenSearch
+          - [ ] Health check ทุก container
+          - [ ] GitHub Actions: CI/CD pipelines ครบถ้วน
+          - [ ] Network: internal service names ตาม contracts/ports.json
+
+          ## Services & Ports
+          ดู \`shared/contracts/ports.json\`" \
+            "service:infra" \
+            "priority:medium" \
+            "Todo"
+
+          echo "✅ ทุก issue ถูกสร้างเรียบร้อยแล้ว!"
