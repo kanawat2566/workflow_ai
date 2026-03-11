@@ -9,6 +9,7 @@ namespace Parser.API.Controllers;
 public sealed class ParseController(
     IRoslynParserService parser,
     IRouteMapService routeMap,
+    ICompareService compare,
     ILogger<ParseController> logger) : ControllerBase
 {
     [HttpPost("repo")]
@@ -87,5 +88,19 @@ public sealed class ParseController(
         }
 
         return Ok(new ParseIncrementalResponse { UpdatedChunks = updatedChunks });
+    }
+
+    [HttpPost("compare")]
+    public async Task<ActionResult<ParseCompareResponse>> ParseCompare(
+        [FromBody] ParseCompareRequest request,
+        CancellationToken ct)
+    {
+        logger.LogInformation("ParseCompare: {RepoPath} {Base}..{Head}", request.RepoPath, request.BaseRef, request.HeadRef);
+
+        if (!Directory.Exists(request.RepoPath))
+            return BadRequest(new { error = $"RepoPath not found: {request.RepoPath}" });
+
+        var result = await compare.CompareAsync(request.RepoPath, request.BaseRef, request.HeadRef, request.Modules, ct);
+        return Ok(result);
     }
 }

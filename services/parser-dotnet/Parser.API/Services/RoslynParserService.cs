@@ -62,6 +62,9 @@ public sealed class RoslynParserService(ILogger<RoslynParserService> logger) : I
         chunks.AddRange(ParseControllers(root, fileName, source));
         chunks.AddRange(ParseViewModels(root, fileName, source));
         chunks.AddRange(ParseEfModels(root, fileName, source));
+        chunks.AddRange(ParseInterfaces(root, fileName, source));
+        chunks.AddRange(ParseRepositoryMethods(root, fileName, source));
+        chunks.AddRange(ParseServiceMethods(root, fileName, source));
 
         return chunks;
     }
@@ -119,7 +122,7 @@ public sealed class RoslynParserService(ILogger<RoslynParserService> logger) : I
         var chunks = new List<ChunkDto>();
         var viewModelClasses = root.DescendantNodes()
             .OfType<ClassDeclarationSyntax>()
-            .Where(c => !IsControllerClass(c) && !IsEfDbContext(c));
+            .Where(c => !IsControllerClass(c) && !IsEfDbContext(c) && !IsRepositoryClass(c) && !IsServiceClass(c));
 
         foreach (var vmClass in viewModelClasses)
         {
@@ -281,12 +284,139 @@ public sealed class RoslynParserService(ILogger<RoslynParserService> logger) : I
         return chunks;
     }
 
+    private List<ChunkDto> ParseInterfaces(CompilationUnitSyntax root, string fileName, string source)
+    {
+        var chunks = new List<ChunkDto>();
+        var interfaces = root.DescendantNodes().OfType<InterfaceDeclarationSyntax>();
+
+        foreach (var iface in interfaces)
+        {
+            var ns = GetNamespace(iface);
+            var lineStart = iface.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            var lineEnd = iface.GetLocation().GetLineSpan().EndLinePosition.Line + 1;
+
+            chunks.Add(new ChunkDto
+            {
+                ChunkId = iface.Identifier.Text,
+                File = fileName,
+                Type = ChunkType.@interface,
+                Content = iface.ToFullString().Trim(),
+                Metadata = new ChunkMetadata
+                {
+                    ClassName = iface.Identifier.Text,
+                    Namespace = ns,
+                    Language = "csharp",
+                    LineStart = lineStart,
+                    LineEnd = lineEnd,
+                },
+            });
+        }
+
+        return chunks;
+    }
+
+    private List<ChunkDto> ParseRepositoryMethods(CompilationUnitSyntax root, string fileName, string source)
+    {
+        var chunks = new List<ChunkDto>();
+        var repos = root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .Where(IsRepositoryClass);
+
+        foreach (var repo in repos)
+        {
+            var ns = GetNamespace(repo);
+            var methods = repo.Members.OfType<MethodDeclarationSyntax>().Where(IsPublicMethod);
+
+            foreach (var method in methods)
+            {
+                var lineStart = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                var lineEnd = method.GetLocation().GetLineSpan().EndLinePosition.Line + 1;
+
+                chunks.Add(new ChunkDto
+                {
+                    ChunkId = $"{repo.Identifier.Text}.{method.Identifier.Text}",
+                    File = fileName,
+                    Type = ChunkType.repository_method,
+                    Content = method.ToFullString().Trim(),
+                    Metadata = new ChunkMetadata
+                    {
+                        ClassName = repo.Identifier.Text,
+                        MethodName = method.Identifier.Text,
+                        Namespace = ns,
+                        Parameters = ExtractParameters(method),
+                        Calls = ExtractMethodCalls(method),
+                        Language = "csharp",
+                        LineStart = lineStart,
+                        LineEnd = lineEnd,
+                    },
+                });
+            }
+        }
+
+        return chunks;
+    }
+
+    private List<ChunkDto> ParseServiceMethods(CompilationUnitSyntax root, string fileName, string source)
+    {
+        var chunks = new List<ChunkDto>();
+        var services = root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .Where(IsServiceClass);
+
+        foreach (var svc in services)
+        {
+            var ns = GetNamespace(svc);
+            var methods = svc.Members.OfType<MethodDeclarationSyntax>().Where(IsPublicMethod);
+
+            foreach (var method in methods)
+            {
+                var lineStart = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                var lineEnd = method.GetLocation().GetLineSpan().EndLinePosition.Line + 1;
+
+                chunks.Add(new ChunkDto
+                {
+                    ChunkId = $"{svc.Identifier.Text}.{method.Identifier.Text}",
+                    File = fileName,
+                    Type = ChunkType.service_method,
+                    Content = method.ToFullString().Trim(),
+                    Metadata = new ChunkMetadata
+                    {
+                        ClassName = svc.Identifier.Text,
+                        MethodName = method.Identifier.Text,
+                        Namespace = ns,
+                        Parameters = ExtractParameters(method),
+                        Calls = ExtractMethodCalls(method),
+                        Language = "csharp",
+                        LineStart = lineStart,
+                        LineEnd = lineEnd,
+                    },
+                });
+            }
+        }
+
+        return chunks;
+    }
+
+
     private static bool IsControllerClass(ClassDeclarationSyntax c) =>
         c.Identifier.Text.EndsWith("Controller", StringComparison.Ordinal) ||
         c.BaseList?.Types.Any(t => t.ToString().Contains("Controller")) == true;
 
     private static bool IsEfDbContext(ClassDeclarationSyntax c) =>
         c.BaseList?.Types.Any(t => t.ToString().Contains("DbContext")) == true;
+
+    private static bool IsRepositoryClass(ClassDeclarationSyntax c) =>
+        c.Identifier.Text.EndsWith("Repository", StringComparison.Ordinal) ||
+        c.BaseList?.Types.Any(t => t.ToString().Contains("Repository")) == true;
+
+    private static bool IsServiceClass(ClassDeclarationSyntax c) =>
+        !IsControllerClass(c) &&
+        !IsEfDbContext(c) &&
+        !IsRepositoryClass(c) &&
+        (c.Identifier.Text.EndsWith("Service", StringComparison.Ordinal)
+            || c.Identifier.Text.EndsWith("Manager", StringComparison.Ordinal)
+            || c.Identifier.Text.EndsWith("Handler", StringComparison.Ordinal)
+            || c.Identifier.Text.EndsWith("Provider", StringComparison.Ordinal));
 
     private static bool IsPublicMethod(MethodDeclarationSyntax m) =>
         m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword));

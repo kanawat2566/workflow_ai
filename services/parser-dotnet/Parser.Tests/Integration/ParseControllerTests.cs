@@ -164,4 +164,50 @@ public class ParseControllerTests(WebApplicationFactory<Program> factory)
             File.Delete(tempFile);
         }
     }
+
+    [Fact]
+    public async Task ParseCompare_WithNonExistentRepo_ReturnsBadRequest()
+    {
+        // Arrange
+        var request = new { repoPath = "/nonexistent/repo", baseRef = "main", headRef = "HEAD" };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/parse/compare", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ParseCompare_WithValidRepoAndSameRef_ReturnsEmptyDiff()
+    {
+        // Arrange — point at a real git directory; same ref produces empty diff
+        var repoRoot = FindGitRoot();
+        if (repoRoot is null) return;
+
+        var request = new { repoPath = repoRoot, baseRef = "HEAD", headRef = "HEAD" };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/parse/compare", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ParseCompareResponse>();
+        Assert.NotNull(body);
+        Assert.Empty(body.AddedChunks);
+        Assert.Empty(body.DeletedChunks);
+        Assert.Empty(body.ModifiedChunks);
+    }
+
+    private static string? FindGitRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        return null;
+    }
 }

@@ -66,13 +66,14 @@
 ### AI Agent 1 — .NET Parser
 > เปิด Claude ที่ `services/parser-dotnet/` แล้วพิมพ์: "อ่าน CLAUDE.md แล้ว implement เลย"
 
-- [ ] **1.1** `Parser.API.csproj` — setup project + Roslyn packages
-- [ ] **1.2** `Models/ChunkDto.cs` — ตาม chunk_schema.json
-- [ ] **1.3** `Services/RoslynParserService.cs` — parse .cs files
-- [ ] **1.4** `Services/RouteMapService.cs` — extract MVC routes
-- [ ] **1.5** `Controllers/ParseController.cs` — POST /parse/repo, /parse/file, /parse/incremental
-- [ ] **1.6** `Dockerfile` — build สำเร็จ
+- [x] **1.1** `Parser.API.csproj` — setup project + Roslyn packages
+- [x] **1.2** `Models/ChunkDto.cs` — ตาม chunk_schema.json
+- [x] **1.3** `Services/RoslynParserService.cs` — parse .cs files (รวม service_method, repository_method, interface)
+- [x] **1.4** `Services/RouteMapService.cs` — extract MVC routes
+- [x] **1.5** `Controllers/ParseController.cs` — POST /parse/repo, /parse/file, /parse/incremental
+- [x] **1.6** `Dockerfile` — build สำเร็จ
 - [ ] **1.7** ทดสอบ: ส่ง .cs file → ได้ JSON chunks กลับมา
+- [x] **1.8** `POST /parse/compare` endpoint — diff chunks ระหว่าง 2 git refs
 
 ### AI Agent 2 — RAG Service
 > เปิด Claude ที่ `services/rag/` (รอ AI 1 เสร็จก่อน)

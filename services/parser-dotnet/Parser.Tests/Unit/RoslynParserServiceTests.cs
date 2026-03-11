@@ -136,4 +136,108 @@ public class RoslynParserServiceTests
         // Assert
         Assert.Empty(chunks);
     }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithServiceClass_ReturnsServiceMethodChunks()
+    {
+        // Arrange
+        const string code = """
+            public interface IPaymentService
+            {
+                void Process(int id);
+            }
+
+            public class PaymentService : IPaymentService
+            {
+                public void Process(int id) { }
+            }
+            """;
+
+        // Act
+        var chunks = await CreateService().ParseSourceAsync(code, "PaymentService.cs");
+
+        // Assert
+        var serviceChunks = chunks.Where(c => c.Type == ChunkType.service_method).ToList();
+        Assert.NotEmpty(serviceChunks);
+        Assert.Equal("PaymentService.Process", serviceChunks[0].ChunkId);
+        Assert.Equal("PaymentService", serviceChunks[0].Metadata.ClassName);
+    }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithRepositoryClass_ReturnsRepositoryMethodChunks()
+    {
+        // Arrange
+        const string code = """
+            public class OrderRepository
+            {
+                public Order GetById(int id) => throw new NotImplementedException();
+                public void Save(Order order) { }
+            }
+            """;
+
+        // Act
+        var chunks = await CreateService().ParseSourceAsync(code, "OrderRepository.cs");
+
+        // Assert
+        var repoChunks = chunks.Where(c => c.Type == ChunkType.repository_method).ToList();
+        Assert.NotEmpty(repoChunks);
+        Assert.All(repoChunks, c => Assert.Equal("OrderRepository", c.Metadata.ClassName));
+    }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithInterface_ReturnsInterfaceChunk()
+    {
+        // Arrange
+        const string code = """
+            public interface IUserService
+            {
+                User GetById(int id);
+                void Delete(int id);
+            }
+            """;
+
+        // Act
+        var chunks = await CreateService().ParseSourceAsync(code, "IUserService.cs");
+
+        // Assert
+        var ifaceChunks = chunks.Where(c => c.Type == ChunkType.@interface).ToList();
+        Assert.Single(ifaceChunks);
+        Assert.Equal("IUserService", ifaceChunks[0].ChunkId);
+        Assert.Equal("IUserService", ifaceChunks[0].Metadata.ClassName);
+    }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithJavaScriptAjaxCall_ExtractsEndpoint()
+    {
+        // Arrange
+        const string js = """
+            $.ajax({ url: '/Payment/Save', type: 'POST', data: {} });
+            """;
+
+        // Act
+        var chunks = await CreateService().ParseSourceAsync(js, "checkout.js");
+
+        // Assert
+        var ajaxChunks = chunks.Where(c => c.Type == ChunkType.js_ajax_call).ToList();
+        Assert.NotEmpty(ajaxChunks);
+        Assert.Contains("/Payment/Save", ajaxChunks[0].Metadata.AjaxEndpoints);
+        Assert.Equal("POST", ajaxChunks[0].Metadata.HttpMethod);
+    }
+
+    [Fact]
+    public async Task ParseSourceAsync_WithJavaScriptEventHandler_ExtractsSelector()
+    {
+        // Arrange
+        const string js = """
+            $('#submitBtn').on('click', function() { console.log('clicked'); });
+            """;
+
+        // Act
+        var chunks = await CreateService().ParseSourceAsync(js, "ui.js");
+
+        // Assert
+        var eventChunks = chunks.Where(c => c.Type == ChunkType.js_event_handler).ToList();
+        Assert.NotEmpty(eventChunks);
+        Assert.Contains(eventChunks, c => c.Metadata.EventHandlers.Any(e => e.Contains("#submitBtn")));
+    }
 }
