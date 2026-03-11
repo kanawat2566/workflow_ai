@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddScoped<IRoslynParserService, RoslynParserService>();
 builder.Services.AddScoped<IRouteMapService, RouteMapService>();
+builder.Services.AddScoped<ICompareService, CompareService>();
 
 var app = builder.Build();
 
