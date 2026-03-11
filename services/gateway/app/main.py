@@ -150,7 +150,7 @@ async def update_todo(todo_id: str, body: TodoUpdate) -> TodoItem:
         raise HTTPException(status_code=404, detail="Todo not found")
     existing = _todos[todo_id]
     updated = existing.model_copy(
-        update={k: v for k, v in body.model_dump().items() if v is not None}
+        update=body.model_dump(exclude_unset=True)
     )
     _todos[todo_id] = updated
     return updated
