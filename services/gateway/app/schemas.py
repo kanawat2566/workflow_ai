@@ -20,3 +20,21 @@ class ApprovalRequest(BaseModel):
 class FeedbackRequest(BaseModel):
     rating: Literal["good", "bad"]
     notes: Optional[str] = None
+
+
+class TodoCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+
+class TodoUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    completed: Optional[bool] = None
+
+
+class TodoItem(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    completed: bool = False
